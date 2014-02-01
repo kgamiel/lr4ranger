@@ -1,4 +1,4 @@
-ALL: build
+all: build
 
 build:
 	cd src; make

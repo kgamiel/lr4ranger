@@ -33,9 +33,18 @@ if result != 0:
     sys.exit(1)
 
 #
+# Get a single range
+#
+range = ctypes.c_int()
+result = lr4ranger_lib.lr4ranger_get_range(handle, ctypes.byref(range))
+if result != 0:
+    print 'Failed to get range: ' + str(result)
+print 'range = ' + str(range.value) + 'mm'
+
+#
 # start ranger collecting data to a file
 #
-data_file = '/tmp/ranger.dat'
+data_file = 'data.txt'
 result = lr4ranger_lib.lr4ranger_start_collecting(handle, data_file, 1)
 if result != 0:
     print 'Failed to start collecting: ' + str(result)
@@ -44,7 +53,7 @@ else:
     # You could do other stuff here, e.g. move servos
     #
     print 'collecting...'
-    time.sleep(5)
+    time.sleep(10)
     print 'done collecting'
     
     #
