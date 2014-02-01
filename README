@@ -1,5 +1,7 @@
 lr4ranger
 
+WARNING!  This is pre-alpha code, it's under active development!
+
 This package includes a C library to communicate with the Porcupine LR4
 Laser Rangefinder.  Sample programs in C and Python are included.
 
