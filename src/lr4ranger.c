@@ -40,6 +40,7 @@
 #include "lr4ranger.h"
 #include <pthread.h>
 #include <limits.h>
+#include <sys/time.h>
 
 typedef enum {
 	CMD_NONE, CMD_STOP
@@ -320,21 +321,54 @@ lr4ranger_result_t lr4ranger_reset(lr4ranger_handle_t handle) {
 	return RANGER_OK;
 }
 
+static double get_time_millis() {
+	struct timeval  tv;
+	return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+}
+
+static void flush(lr4ranger_t *r) {
+	unsigned char measurement[8];
+	double start = get_time_millis();
+
+	for(;;) {
+		double now = get_time_millis();
+
+		if(hid_read(r->hid_handle, &measurement[0], sizeof(measurement))) {
+			break;
+		}
+		if(now - start > 500) {
+			break;
+		}
+	}
+}
+
+/*
+ * There is something I don't understand about the operation yet.  Sometimes
+ * it seems to return cached values before the laser even turns on.  Is there
+ * a way to query the laser status?  Or flush the cache?
+ */
 unsigned int get_range(lr4ranger_t *r) {
 	unsigned int result = 0;
 	unsigned char measurement[8];
 	int res;
-	int read_one = 0;
+	int num_read = 0;
 	int try;
+	double start = get_time_millis();
+
+	flush(r);
 
 	/* we read all available at the moment and keep the last */
 	for(try = 0; ; try++) {
+		double now = get_time_millis();
+		if((now - start) > 500) {
+			break;
+		}
 		res = hid_read(r->hid_handle, &measurement[0],
 				sizeof(measurement));
 		if (res == 0) {
 			/* no data available this time */
-			if(read_one) {
-				/* we read one earlier, so break */
+			if(num_read > 1) {
+				/* we read some earlier, so break */
 				break;
 			}
 		} else if (res == -1) {
@@ -346,7 +380,7 @@ unsigned int get_range(lr4ranger_t *r) {
 					&& (measurement[0] == (unsigned char) STS_MEASUREMENT_DATA)) {
 				result =
 						(unsigned int) ((measurement[2] << 8) + measurement[1]);
-				read_one = 1;
+				num_read++;
 			}
 		}
 	}
@@ -411,6 +445,7 @@ void *thread_main(void *user) {
 		cmd = r->cmd;
 		terr = pthread_mutex_unlock(&r->mutex);
 		if (cmd == CMD_STOP) {
+			printf("user requested stop\n");
 			break;
 		}
 
@@ -420,6 +455,7 @@ void *thread_main(void *user) {
 		last_reading = now;
 
 		range = get_range(r);
+		printf("back from get_range...\n");
 		if (range > 0) {
 			static char buf[64];
 
