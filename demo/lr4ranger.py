@@ -41,7 +41,13 @@ if result != 0:
     print 'Failed to get range: ' + str(result)
 print 'range = ' + str(range.value) + 'mm'
 
-collect=False
+#
+# experimenting, it seems to want a delay after a single get_range(), to
+# cleaning turn off the laser
+#
+time.sleep(2)
+
+collect=True
 if collect:
     #
     # start ranger collecting data to a file

@@ -449,16 +449,14 @@ void *thread_main(void *user) {
 		if (cmd == CMD_STOP) {
 			break;
 		}
-
-		if (elapsed < r->interval_s) {
-			continue;
-		}
 		last_reading = now;
 
 		range = get_range(r);
+		if (elapsed < r->interval_s) {
+			continue;
+		}
 		if (range > 0) {
 			static char buf[64];
-
 			(void)strftime(buf, sizeof(buf), "%FT%T", timeinfo);
 			fprintf(r->fp, "%s\t%i\n", buf, range);
 			fflush(r->fp);
