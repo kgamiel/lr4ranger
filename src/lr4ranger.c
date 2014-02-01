@@ -52,6 +52,7 @@ typedef struct _lr4ranger_t {
     thread_cmd_t    cmd;
     pthread_mutex_t mutex;
     short           in_use;
+    time_t          interval_s;
 } lr4ranger_t;
 
 #define MAX_RANGERS 16
@@ -67,9 +68,9 @@ typedef enum { OPEN } lr4ranger_event_t;
 #define CMD_WRITE_CONFIG        0x02
 #define STS_CONFIG_DATA         0x01
 #define MAX_OPEN_TRIES          16
-#define RANGER_READ_TIMEOUT_MS  1000
 #define MAX_SAMPLE_TRIES        10
 #define MAX_RANGE_SAMPLES       5
+#define RANGER_READ_TIMEOUT_MS  100
 
 /*
 As reported on the Mac:
@@ -94,6 +95,8 @@ Device Found
 #define CFG_DO_DOUBLE            0x00000400
 
 #define CFG_RUN                  0x00008000
+
+#define CFG_FILTER_ERRORS        0x00000400
 
 #define DEFAULT_CONFIG                  0x00
 
@@ -291,7 +294,10 @@ lr4ranger_result_t lr4ranger_open_serial(lr4ranger_handle_t *handle,
     if(lr4ranger_get_configuration(r, &(r->orig_configuration)) == 0) {
         return RANGER_ERR_GET_CONFIG;
     }
-    printf("orig config=%.2X\n", r->orig_configuration);
+
+    if(pthread_mutex_init(&r->mutex, NULL)) {
+        fprintf(stderr, "Failed to init mutex\n");
+    }
 
     return RANGER_OK;
 }
@@ -357,7 +363,6 @@ lr4ranger_result_t lr4ranger_get_range(lr4ranger_handle_t handle,
             sizeof(measurement), r->read_timeout_ms);
         if(res == 0) {
             /* timeout */
-            fprintf(stderr, "Timeout reading from ranger\n");
             continue;
         } else if(res == -1) {
             result = RANGER_ERR_READ_FAILED;
@@ -387,8 +392,7 @@ lr4ranger_result_t lr4ranger_get_range(lr4ranger_handle_t handle,
 
     /* stop running */
     r->configuration &= ~CFG_RUN;
-    if(lr4ranger_set_configuration(r, r->configuration)
-        != 1) {
+    if(lr4ranger_set_configuration(r, r->configuration) != 1) {
         result = RANGER_ERR_SET_CONFIG;
     }
 
@@ -397,35 +401,96 @@ lr4ranger_result_t lr4ranger_get_range(lr4ranger_handle_t handle,
 
 lr4ranger_result_t lr4ranger_close(lr4ranger_handle_t handle) {
     VALIDATION();
-
+    (void)lr4ranger_set_configuration(r, 0);
     (void)hid_exit();
 
     return result;
 }
 
+static lr4ranger_result_t flush(lr4ranger_handle_t handle) {
+    unsigned char measurement[8];
+
+    VALIDATION();
+
+    for(int sample = 0; ; sample++) {
+        int res = hid_read_timeout(r->hid_handle, &measurement[0],
+            sizeof(measurement), 20);
+        if(res == 0) {
+            /* timeout */
+            break;
+        } else if(res == -1) {
+            fprintf(stderr, "hid_read_timeout() failed\n");
+            break;
+        }
+    }
+    return RANGER_OK;
+}
+
+unsigned int get_averaged_range(lr4ranger_t *r) {
+    unsigned int result = 0;
+    unsigned int total = 0;
+    unsigned int samples;
+    unsigned char measurement[8];
+
+    for(samples = 0; ; samples++) {
+        int res = hid_read_timeout(r->hid_handle, &measurement[0],
+            sizeof(measurement), r->read_timeout_ms);
+        if(res == 0) {
+            /* timeout */
+            break;
+        } else if(res == -1) {
+            fprintf(stderr, "hid_read_timeout() failed\n");
+            break;
+        } else {
+            if ((res == 8) && (measurement[0] ==
+                (unsigned char)STS_MEASUREMENT_DATA)) {
+                total += (unsigned int)((measurement[2] << 8) + measurement[1]);
+            } else {
+                fprintf(stderr, "something else\n");
+            }
+        }
+    }
+    if(total == 0) {
+        result = 0;
+    } else {
+        result = total / samples;
+        printf("%i averaged over %i samples\n", result, samples);
+    }
+    return result;
+}
+
 void *thread_main(void *user) {
+    time_t last_reading = 0;
+    int *handle_ptr = (int*)user;
+    int handle = *handle_ptr;
+
+    flush(handle);
+
     for(;;) {
         /* does user want us to cancel? */
-        int *handle_ptr = (int*)user;
-        int handle = *handle_ptr;
-        lr4ranger_result_t err;
         int terr;
-        unsigned int range = 0;
+        unsigned int range;
         thread_cmd_t cmd;
         lr4ranger_t *r = &g_ranger[handle];
+        time_t now = time(NULL);
+        time_t elapsed = now - last_reading;
 
-        terr = pthread_mutex_lock(&g_mutex);
+        terr = pthread_mutex_lock(&r->mutex);
         cmd = r->cmd;
-        terr = pthread_mutex_unlock(&g_mutex);
+        terr = pthread_mutex_unlock(&r->mutex);
         if(cmd == CMD_STOP) {
             break;
         }
-        /* get range here */
-        if((err = lr4ranger_get_range(handle, &range)) != RANGER_OK) {
-            fprintf(stderr, "Error getting range: %i\n", err);
+
+        if(elapsed < r->interval_s) {
             continue;
         }
-        fprintf(r->fp, "%ld\t%i\n", time(NULL), range);
+        last_reading = now;
+
+        range = get_averaged_range(r);
+        if(range > 0) {
+            fprintf(r->fp, "%ld\t%i\n", time(NULL), range);
+        }
     }
  
     return NULL;
@@ -433,26 +498,24 @@ void *thread_main(void *user) {
 
 
 lr4ranger_result_t lr4ranger_start_collecting(lr4ranger_handle_t handle,
-    const char *filename) {
+    const char *filename, int interval_in_seconds) {
     unsigned int configuration = 0;
 
     VALIDATION();
+
+    r->interval_s = interval_in_seconds;
 
     if((r->fp = fopen(filename, "w")) == NULL) {
         perror(filename);
         return RANGER_INVALID_FILENAME;
     }
 
-    /* put ranger into interval mode */
-    configuration |= CFG_MODE_INTERVAL;
-
+    configuration = CFG_MODE_CONTINUOUS;
+    //configuration |= CFG_FILTER_ERRORS;
     if(lr4ranger_set_configuration(r, configuration) == 0) {
         return RANGER_ERR_SET_CONFIG;
     }
 
-    /* KAG - must set desired interval here */
-
-    usleep(100);
     configuration |= CFG_RUN;
     if(lr4ranger_set_configuration(r, configuration) == 0) {
         return RANGER_ERR_SET_CONFIG;

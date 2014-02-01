@@ -33,6 +33,7 @@ of the authors and should not be interpreted as representing official policies,
 either expressed or implied, of the FreeBSD Project.
 */
 #include <stdio.h>
+#include <unistd.h>
 #include "lr4ranger.h"
 
 int main(int argc, char **argv) {
@@ -58,6 +59,18 @@ int main(int argc, char **argv) {
         fprintf(stderr, "lr4ranger_get_range() failed with %i\n", result);
     } else {
         printf("range: %i mm\n", range_mm);
+    }
+
+    if((result = lr4ranger_start_collecting(handle, "data.txt", 1))
+        != RANGER_OK) {
+        fprintf(stderr, "lr4ranger_start_collecting() failed with %i\n",
+            result);
+    } else {
+        sleep(10);
+        if((result = lr4ranger_stop_collecting(handle)) != RANGER_OK) {
+            fprintf(stderr, "lr4ranger_stop_collecting() failed with %i\n",
+                result);
+        }
     }
 
     /* Close the ranger */

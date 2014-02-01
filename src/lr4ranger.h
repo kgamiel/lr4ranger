@@ -55,13 +55,14 @@ typedef int lr4ranger_handle_t;
 
 lr4ranger_result_t lr4ranger_open(lr4ranger_handle_t *handle);
 lr4ranger_result_t lr4ranger_open_serial(lr4ranger_handle_t *handle,
-    wchar_t *serial_number);
+                                            wchar_t *serial_number);
 lr4ranger_result_t lr4ranger_reset(lr4ranger_handle_t handle);
 lr4ranger_result_t lr4ranger_get_range(lr4ranger_handle_t handle,
-    unsigned int *range);
+                                        unsigned int *range);
 lr4ranger_result_t lr4ranger_close(lr4ranger_handle_t handle);
 lr4ranger_result_t lr4ranger_start_collecting(lr4ranger_handle_t handle,
-    const char *filename);
+                                                const char *filename,
+                                                int interval_in_seconds);
 lr4ranger_result_t lr4ranger_stop_collecting(lr4ranger_handle_t handle);
 
 #endif

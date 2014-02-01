@@ -26,7 +26,8 @@ lr4ranger_lib = ctypes.CDLL(library_path)
 #
 # try to open USB connection to ranger
 #
-result = lr4ranger_lib.lr4ranger_open()
+handle = ctypes.c_int()
+result = lr4ranger_lib.lr4ranger_open(ctypes.byref(handle))
 if result != 0:
     print 'Failed to open ranger: ' + str(result)
     sys.exit(1)
@@ -35,28 +36,28 @@ if result != 0:
 # start ranger collecting data to a file
 #
 data_file = '/tmp/ranger.dat'
-result = lr4ranger_lib.lr4ranger_start_collecting(data_file)
+result = lr4ranger_lib.lr4ranger_start_collecting(handle, data_file, 1)
 if result != 0:
     print 'Failed to start collecting: ' + str(result)
-
-#
-# You could do other stuff here, e.g. move servos
-#
-print 'collecting...'
-time.sleep(5)
-print 'done collecting'
-
-#
-# We're done moving servos, stop collecting data
-#
-result = lr4ranger_lib.lr4ranger_stop_collecting()
-if result != 0:
-    print 'Failed to stop collecting: ' + str(result)
-
+else:
+    #
+    # You could do other stuff here, e.g. move servos
+    #
+    print 'collecting...'
+    time.sleep(5)
+    print 'done collecting'
+    
+    #
+    # We're done moving servos, stop collecting data
+    #
+    result = lr4ranger_lib.lr4ranger_stop_collecting(handle)
+    if result != 0:
+        print 'Failed to stop collecting: ' + str(result)
+    
 #
 # Always close the USB connection!
 #
-result = lr4ranger_lib.lr4ranger_close()
+result = lr4ranger_lib.lr4ranger_close(handle)
 if result != 0:
     print 'Failed to stop collecting: ' + str(result)
 

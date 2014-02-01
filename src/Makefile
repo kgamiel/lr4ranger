@@ -32,9 +32,6 @@ hid-libusb.o:hid-libusb.c hidapi.h
 lr4ranger.o:lr4ranger.c lr4ranger.h 
 	$(CC) $(CFLAGS) -c lr4ranger.c 
 
-splint::
-	splint -unrecog -mustfreeonly -nullpass -usedef -compdef +posixstrictlib +skipposixheaders $(INC) lr4ranger.c
-
 liblr4ranger.so.1:lr4ranger.o
 	$(CC) $(CFLAGS) $(DEBUG) -shared -Wl,$(SONAME),liblr4ranger.so.1 -o liblr4ranger.so.1 lr4ranger.c $(HID_C) $(LIB)
 

@@ -1,13 +1,29 @@
+lr4ranger
+
 This package includes a C library to communicate with the Porcupine LR4
-Laser Rangefinder.
+Laser Rangefinder.  Sample programs in C and Python are included.
 
-The libusb-1.0 (development package) must be installed.
+Platforms Tested
+----------------
+- Mac OS X (10.9.1)
+- Linux (CentOS, Raspbian)
 
-To build, type 'make'.
+Prerequisites
+-------------
+- C compiler
+- The libusb-1.0 library and header files
 
-demo/lr4ranger.py is a simple python script that demonstrations usage.
-To run demo, type 'demo/lr4ranger.py'
+Build
+-----
+type 'make'
 
+Demo
+----
+- src/ranger_test is a C application that does a single range test
+- demo/lr4ranger.py is a simple python script
+
+Author
+------
 kgamiel@islandedge.com
-
+www.islandedge.com
 
