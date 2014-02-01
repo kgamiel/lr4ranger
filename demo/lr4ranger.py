@@ -41,28 +41,30 @@ if result != 0:
     print 'Failed to get range: ' + str(result)
 print 'range = ' + str(range.value) + 'mm'
 
-#
-# start ranger collecting data to a file
-#
-data_file = 'data.txt'
-result = lr4ranger_lib.lr4ranger_start_collecting(handle, data_file, 1)
-if result != 0:
-    print 'Failed to start collecting: ' + str(result)
-else:
+collect=False
+if collect:
     #
-    # You could do other stuff here, e.g. move servos
+    # start ranger collecting data to a file
     #
-    print 'collecting...'
-    time.sleep(10)
-    print 'done collecting'
-    
-    #
-    # We're done moving servos, stop collecting data
-    #
-    result = lr4ranger_lib.lr4ranger_stop_collecting(handle)
+    data_file = 'data.txt'
+    result = lr4ranger_lib.lr4ranger_start_collecting(handle, data_file, 1)
     if result != 0:
-        print 'Failed to stop collecting: ' + str(result)
-    
+        print 'Failed to start collecting: ' + str(result)
+    else:
+        #
+        # You could do other stuff here, e.g. move servos
+        #
+        print 'collecting...'
+        time.sleep(10)
+        print 'done collecting'
+        
+        #
+        # We're done moving servos, stop collecting data
+        #
+        result = lr4ranger_lib.lr4ranger_stop_collecting(handle)
+        if result != 0:
+            print 'Failed to stop collecting: ' + str(result)
+        
 #
 # Always close the USB connection!
 #
