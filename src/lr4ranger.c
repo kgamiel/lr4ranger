@@ -363,6 +363,9 @@ unsigned int get_range(lr4ranger_t *r) {
 		if((now - start) > 500) {
 			break;
 		}
+		/* not sure why I need this */
+		usleep(10);
+
 		res = hid_read(r->hid_handle, &measurement[0],
 				sizeof(measurement));
 		if (res == 0) {
@@ -408,8 +411,7 @@ lr4ranger_result_t lr4ranger_get_range(lr4ranger_handle_t handle,
 	*range = get_range(r);
 
 	/* stop running */
-	r->configuration &= ~CFG_RUN;
-	if (lr4ranger_set_configuration(r, r->configuration) != 1) {
+	if (lr4ranger_set_configuration(r, 0) != 1) {
 		result = RANGER_ERR_SET_CONFIG;
 	}
 
@@ -445,7 +447,6 @@ void *thread_main(void *user) {
 		cmd = r->cmd;
 		terr = pthread_mutex_unlock(&r->mutex);
 		if (cmd == CMD_STOP) {
-			printf("user requested stop\n");
 			break;
 		}
 
@@ -455,7 +456,6 @@ void *thread_main(void *user) {
 		last_reading = now;
 
 		range = get_range(r);
-		printf("back from get_range...\n");
 		if (range > 0) {
 			static char buf[64];
 
@@ -470,7 +470,6 @@ void *thread_main(void *user) {
 
 lr4ranger_result_t lr4ranger_start_collecting(lr4ranger_handle_t handle,
 		const char *filename, int interval_in_seconds) {
-	unsigned int configuration = 0;
 
 	VALIDATION()
 
@@ -481,14 +480,13 @@ lr4ranger_result_t lr4ranger_start_collecting(lr4ranger_handle_t handle,
 		return RANGER_INVALID_FILENAME;
 	}
 
-	configuration = CFG_MODE_CONTINUOUS;
-	//configuration |= CFG_FILTER_ERRORS;
-	if (lr4ranger_set_configuration(r, configuration) == 0) {
+	r->configuration = CFG_MODE_CONTINUOUS;
+	if (lr4ranger_set_configuration(r, r->configuration) == 0) {
 		return RANGER_ERR_SET_CONFIG;
 	}
 
-	configuration |= CFG_RUN;
-	if (lr4ranger_set_configuration(r, configuration) == 0) {
+	r->configuration |= CFG_RUN;
+	if (lr4ranger_set_configuration(r, r->configuration) == 0) {
 		return RANGER_ERR_SET_CONFIG;
 	}
 
@@ -513,6 +511,10 @@ lr4ranger_result_t lr4ranger_stop_collecting(lr4ranger_handle_t handle) {
 	if (pthread_join(r->thread, NULL )) {
 		fprintf(stderr, "Error joining thread\n");
 		return RANGER_THREAD_ERROR;
+	}
+
+	if (lr4ranger_set_configuration(r, 0) != 1) {
+		result = RANGER_ERR_SET_CONFIG;
 	}
 
 	if (r->fp != NULL ) {
