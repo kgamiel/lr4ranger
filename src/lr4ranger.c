@@ -250,6 +250,32 @@ static lr4ranger_handle_t get_free_handle() {
 	return handle;
 }
 
+static double get_time_millis() {
+	struct timeval  tv;
+
+	gettimeofday(&tv, NULL);
+	return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+}
+
+static void flush(lr4ranger_t *r) {
+	unsigned char measurement[8];
+	double start = get_time_millis();
+	double elapsed = 0.0;
+
+	for(;;) {
+		double now = get_time_millis();
+
+		if(hid_read(r->hid_handle, &measurement[0], sizeof(measurement)) == 0) {
+			break;
+		}
+		elapsed = now - start;
+		printf("elapsed=%.2f\n", elapsed);
+		if(elapsed > 500) {
+			break;
+		}
+	}
+}
+
 lr4ranger_result_t lr4ranger_open_serial(lr4ranger_handle_t *handle,
 		wchar_t *serial_number) {
 	int try;
@@ -321,27 +347,6 @@ lr4ranger_result_t lr4ranger_reset(lr4ranger_handle_t handle) {
 	return RANGER_OK;
 }
 
-static double get_time_millis() {
-	struct timeval  tv;
-	return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
-}
-
-static void flush(lr4ranger_t *r) {
-	unsigned char measurement[8];
-	double start = get_time_millis();
-
-	for(;;) {
-		double now = get_time_millis();
-
-		if(hid_read(r->hid_handle, &measurement[0], sizeof(measurement))) {
-			break;
-		}
-		if(now - start > 500) {
-			break;
-		}
-	}
-}
-
 /*
  * There is something I don't understand about the operation yet.  Sometimes
  * it seems to return cached values before the laser even turns on.  Is there
@@ -355,7 +360,7 @@ unsigned int get_range(lr4ranger_t *r) {
 	int try;
 	double start = get_time_millis();
 
-	flush(r);
+	//flush(r);
 
 	/* we read all available at the moment and keep the last */
 	for(try = 0; ; try++) {
@@ -428,35 +433,40 @@ lr4ranger_result_t lr4ranger_close(lr4ranger_handle_t handle) {
 }
 
 void *thread_main(void *user) {
-	time_t last_reading = 0;
+	double last_reading = 0;
 	int *handle_ptr = (int*) user;
 	int handle = *handle_ptr;
 	lr4ranger_t *r = &g_ranger[handle];
 
 	for (;;) {
-		/* does user want us to cancel? */
 		int terr;
+		double elapsed;
 		unsigned int range;
 		thread_cmd_t cmd;
-		time_t now = time(NULL);
-		time_t elapsed = now - last_reading;
-		struct tm *timeinfo;
+		double now;
 
-		timeinfo = localtime (&now);
+		now = get_time_millis();
+
 		terr = pthread_mutex_lock(&r->mutex);
 		cmd = r->cmd;
 		terr = pthread_mutex_unlock(&r->mutex);
 		if (cmd == CMD_STOP) {
 			break;
 		}
-		last_reading = now;
-
 		range = get_range(r);
-		if (elapsed < r->interval_s) {
+		elapsed = (now - last_reading);
+		if (elapsed < (double)(r->interval_s * 1000.0)) {
 			continue;
 		}
+		last_reading = now;
 		if (range > 0) {
+			time_t rawtime;
+			struct tm * timeinfo;
 			static char buf[64];
+
+			time (&rawtime);
+			timeinfo = localtime (&rawtime);
+
 			(void)strftime(buf, sizeof(buf), "%FT%T", timeinfo);
 			fprintf(r->fp, "%s\t%i\n", buf, range);
 			fflush(r->fp);
