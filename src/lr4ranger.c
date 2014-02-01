@@ -257,6 +257,7 @@ static double get_time_millis() {
 	return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
 }
 
+#ifdef FLUSH
 static void flush(lr4ranger_t *r) {
 	unsigned char measurement[8];
 	double start = get_time_millis();
@@ -275,6 +276,7 @@ static void flush(lr4ranger_t *r) {
 		}
 	}
 }
+#endif
 
 lr4ranger_result_t lr4ranger_open_serial(lr4ranger_handle_t *handle,
 		wchar_t *serial_number) {
